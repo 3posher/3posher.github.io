@@ -12,8 +12,6 @@
     label { display: block; margin: 0.8rem 0 0.2rem; font-size: 0.85rem; color: #777; font-weight: 500; }
     input, textarea, select { width: 100%; padding: 0.65rem; background: #1a1a1a; border: 1px solid #333; border-radius: 6px; color: #fff; box-sizing: border-box; font-family: inherit; font-size: 0.9rem; }
     input:focus, textarea:focus, select:focus { border-color: #444; outline: none; }
-    .file-input-wrapper { background: #1a1a1a; border: 1px dashed #444; padding: 1rem; text-align: center; border-radius: 6px; cursor: pointer; }
-    .file-input-wrapper:hover { border-color: #666; }
     button { width: 100%; padding: 0.8rem; background: #22c55e; border: none; border-radius: 6px; color: #fff; font-weight: 600; margin-top: 1.5rem; cursor: pointer; font-size: 0.9rem; transition: background 0.2s; }
     button:hover { background: #16a34a; }
     #status { margin-top: 1.2rem; text-align: center; font-size: 0.9rem; font-weight: 500; line-height: 1.4; }
@@ -50,33 +48,20 @@
   <label>Description</label>
   <textarea id="p-desc" rows="3" placeholder="Write your description here..."></textarea>
 
-  <label>Product Image (Upload from Device)</label>
-  <div class="file-input-wrapper">
-    <input type="file" id="p-image-file" accept="image/*">
-  </div>
+  <label>Image Filename (Must match the exact photo name you upload to GitHub)</label>
+  <input type="text" id="p-image" placeholder="e.g. boxer1.jpeg">
 
-  <label>Fallback Emoji (If no image is uploaded)</label>
-  <input type="text" id="p-emoji" value="👟">
+  <label>Fallback Emoji (Shows if no image filename provided)</label>
+  <input type="text" id="p-emoji" value="👕">
 
   <button onclick="addProduct()">Publish Product to Store</button>
   <div id="status"></div>
 </div>
 
 <script>
-  // ── CONFIGURATION ──
   const GH_OWNER = "3posher"; 
   const GH_REPO = "3posher.github.io";
   const GH_FILE_PATH = "index.html"; 
-
-  // Helper function to turn the computer file into data text GitHub can understand
-  function getBase64(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result.split(',')[1]);
-      reader.onerror = error => reject(error);
-    });
-  }
 
   async function addProduct() {
     const token = document.getElementById('gh-token').value.trim();
@@ -86,8 +71,8 @@
     const price = document.getElementById('p-price').value.trim();
     const priceVal = parseInt(document.getElementById('p-priceVal').value);
     const desc = document.getElementById('p-desc').value.trim();
+    const image = document.getElementById('p-image').value.trim();
     const emoji = document.getElementById('p-emoji').value.trim();
-    const imageFileInput = document.getElementById('p-image-file');
     const statusDiv = document.getElementById('status');
 
     if (!token || !name || !price || isNaN(priceVal)) {
@@ -96,40 +81,12 @@
       return;
     }
 
-    let finalImageName = "";
-
+    statusDiv.innerText = "Modifying code layout...";
+    statusDiv.style.color = "#f59e0b";
+    
+    const codeUrl = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_FILE_PATH}`;
+    
     try {
-      // 1. If user selected an image file, upload it to GitHub repository first
-      if (imageFileInput.files.length > 0) {
-        statusDiv.innerText = "Uploading your image file to GitHub...";
-        statusDiv.style.color = "#f59e0b";
-
-        const file = imageFileInput.files[0];
-        // Clean up the filename so spaces don't break HTML urls
-        finalImageName = Date.now() + "_" + file.name.replace(/\s+/g, '_'); 
-        
-        const base64Content = await getBase64(file);
-        const imageUploadUrl = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${finalImageName}`;
-
-        const imgRes = await fetch(imageUploadUrl, {
-          method: "PUT",
-          headers: {
-            "Authorization": `token ${token}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            message: `Uploaded image: ${finalImageName} via Admin Panel`,
-            content: base64Content
-          })
-        });
-
-        if (!imgRes.ok) throw new Error("Image upload failed. Check repository settings or your token permissions.");
-      }
-
-      // 2. Connect to index.html and update product array code
-      statusDiv.innerText = "Image uploaded successfully! Modifying code layout...";
-      const codeUrl = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_FILE_PATH}`;
-      
       const res = await fetch(codeUrl, {
         headers: { "Authorization": `token ${token}` }
       });
@@ -147,7 +104,7 @@
       }
 
       const newId = Math.floor(Date.now() / 1000);
-      const newProductObject = `\n\n      // ── PRODUCT ADDED VIA ADMIN PANEL ─────────────────────────────────\n      { id:${newId}, name:"${name}", category:"${category}", brand:"${brand}", price:"${price}", priceVal:${priceVal}, desc:"${desc}", image:"${finalImageName}", emoji:"${emoji}" },`;
+      const newProductObject = `\n\n      // ── PRODUCT ADDED VIA ADMIN PANEL ─────────────────────────────────\n      { id:${newId}, name:"${name}", category:"${category}", brand:"${brand}", price:"${price}", priceVal:${priceVal}, desc:"${desc}", image:"${image}", emoji:"${emoji}" },`;
 
       const updatedContent = oldContent.slice(0, insertIndex) + newProductObject + oldContent.slice(insertIndex);
 
@@ -167,16 +124,15 @@
       });
 
       if (updateRes.ok) {
-        statusDiv.innerText = "✅ Success! Product and Image uploaded. Wait about 1 minute for GitHub to reload changes, then check your site.";
+        statusDiv.innerText = "✅ Success! Product data written. Wait about 30-60 seconds for GitHub to build, then refresh your site.";
         statusDiv.style.color = "#22c55e";
         
-        // Reset everything
         document.getElementById('p-name').value = "";
         document.getElementById('p-brand').value = "";
         document.getElementById('p-price').value = "";
         document.getElementById('p-priceVal').value = "";
         document.getElementById('p-desc').value = "";
-        imageFileInput.value = "";
+        document.getElementById('p-image').value = "";
       } else {
         throw new Error("GitHub rejected updating your index.html text.");
       }
