@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>3posher - Admin Panel</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet"/>
+  <title>3posher - Master Admin Panel</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght=400;600&display=swap" rel="stylesheet"/>
   <style>
     body { background: #0a0a0a; color: #fff; font-family: 'Inter', sans-serif; padding: 2rem; margin: 0; }
     .admin-box { max-width: 500px; margin: 2rem auto; background: #111; padding: 2rem; border-radius: 12px; border: 1px solid #222; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
-    h2 { margin-top: 0; margin-bottom: 1.5rem; text-align: center; font-weight: 600; letter-spacing: -0.02em; }
+    h2 { margin-top: 0; margin-bottom: 0.3rem; text-align: center; font-weight: 600; letter-spacing: -0.02em; }
+    .subtitle { text-align: center; color: #555; font-size: 0.8rem; margin-bottom: 1.5rem; }
     label { display: block; margin: 0.8rem 0 0.2rem; font-size: 0.85rem; color: #777; font-weight: 500; }
     input, textarea, select { width: 100%; padding: 0.65rem; background: #1a1a1a; border: 1px solid #333; border-radius: 6px; color: #fff; box-sizing: border-box; font-family: inherit; font-size: 0.9rem; }
     input:focus, textarea:focus, select:focus { border-color: #444; outline: none; }
@@ -21,6 +22,7 @@
 
 <div class="admin-box">
   <h2>3posher Admin Panel</h2>
+  <div class="subtitle">Updates index.html & products.html</div>
   
   <label>GitHub Personal Access Token</label>
   <input type="password" id="gh-token" placeholder="Paste your ghp_ token here">
@@ -28,42 +30,92 @@
   <hr style="border: none; border-top: 1px solid #222; margin: 1.5rem 0;">
 
   <label>Product Name</label>
-  <input type="text" id="p-name" placeholder="e.g. New Balance x Kith">
+  <input type="text" id="p-name" placeholder="e.g. Boxer Shirt">
 
   <label>Brand</label>
-  <input type="text" id="p-brand" placeholder="e.g. New Balance">
+  <input type="text" id="p-brand" placeholder="e.g. Balenciaga">
 
   <label>Category</label>
   <select id="p-category">
-    <option value="shoes">Shoes 👟</option>
     <option value="clothes">Clothes 👕</option>
+    <option value="shoes">Shoes 👟</option>
   </select>
 
   <label>Price Display (with symbol)</label>
-  <input type="text" id="p-price" placeholder="e.g. ₹2,699">
+  <input type="text" id="p-price" placeholder="e.g. ₹1,899">
 
-  <label>Price Value (numbers only for filters)</label>
-  <input type="number" id="p-priceVal" placeholder="e.g. 2699">
+  <label>Price Value (numbers only)</label>
+  <input type="number" id="p-priceVal" placeholder="e.g. 1899">
 
   <label>Description</label>
-  <textarea id="p-desc" rows="3" placeholder="Write your description here..."></textarea>
+  <textarea id="p-desc" rows="3" placeholder="Write product description..."></textarea>
 
-  <label>Image Filename (Must match the exact photo name you upload to GitHub)</label>
+  <label>Main Image File (For Storefront Grid)</label>
   <input type="text" id="p-image" placeholder="e.g. boxer1.jpeg">
 
-  <label>Fallback Emoji (Shows if no image filename provided)</label>
+  <label>Extra Gallery Images (For Product Page - separated by commas)</label>
+  <input type="text" id="p-extra-images" placeholder="e.g. boxer2.jpeg, boxer3.jpeg">
+
+  <label>Fallback Emoji</label>
   <input type="text" id="p-emoji" value="👕">
 
-  <button onclick="addProduct()">Publish Product to Store</button>
+  <button onclick="publishProduct()">Publish to Both Pages</button>
   <div id="status"></div>
 </div>
 
 <script>
   const GH_OWNER = "3posher"; 
   const GH_REPO = "3posher.github.io";
-  const GH_FILE_PATH = "index.html"; 
 
-  async function addProduct() {
+  async function updateGitHubFile(token, fileName, name, category, brand, price, priceVal, desc, image, extraImages, emoji, newId) {
+    const url = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${fileName}`;
+    
+    const res = await fetch(url, {
+      headers: { "Authorization": `token ${token}` }
+    });
+    
+    if (!res.ok) throw new Error(`Could not fetch ${fileName} from GitHub.`);
+    
+    const fileData = await res.json();
+    const oldContent = decodeURIComponent(escape(atob(fileData.sha ? fileData.content : "")));
+
+    const arrayStartMarker = "const products = [";
+    const insertIndex = oldContent.indexOf(arrayStartMarker) + arrayStartMarker.length;
+
+    if (oldContent.indexOf(arrayStartMarker) === -1) {
+      throw new Error(`Could not find the products array marker inside ${fileName}.`);
+    }
+
+    // Dynamic clean formatting for code string generation
+    let imagesCodeString = `["${image}"`;
+    if(extraImages.length > 0) {
+        extraImages.forEach(img => {
+            if(img.trim()) imagesCodeString += `, "${img.trim()}"`;
+        });
+    }
+    imagesCodeString += `]`;
+
+    const newProductObject = `\n\n      // ── ADDED VIA ADMIN PANEL ─────────────────────────────────\n      { id:${newId}, name:"${name}", category:"${category}", brand:"${brand}", price:"${price}", priceVal:${priceVal}, desc:"${desc}", image:"${image}", images: ${imagesCodeString}, emoji:"${emoji}" },`;
+
+    const updatedContent = oldContent.slice(0, insertIndex) + newProductObject + oldContent.slice(insertIndex);
+
+    const updateRes = await fetch(url, {
+      method: "PUT",
+      headers: {
+        "Authorization": `token ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        message: `Admin Panel Sync: Added ${name}`,
+        content: btoa(unescape(encodeURIComponent(updatedContent))),
+        sha: fileData.sha
+      })
+    });
+
+    if (!updateRes.ok) throw new Error(`GitHub rejected updating ${fileName}.`);
+  }
+
+  async function publishProduct() {
     const token = document.getElementById('gh-token').value.trim();
     const name = document.getElementById('p-name').value.trim();
     const brand = document.getElementById('p-brand').value.trim();
@@ -72,71 +124,38 @@
     const priceVal = parseInt(document.getElementById('p-priceVal').value);
     const desc = document.getElementById('p-desc').value.trim();
     const image = document.getElementById('p-image').value.trim();
+    const extraImagesRaw = document.getElementById('p-extra-images').value.trim();
     const emoji = document.getElementById('p-emoji').value.trim();
     const statusDiv = document.getElementById('status');
 
     if (!token || !name || !price || isNaN(priceVal)) {
-      statusDiv.innerText = "❌ Error: Please fill out Token, Name, Price, and Price Value.";
+      statusDiv.innerText = "❌ Error: Please check Token, Name, Price, and Price Value.";
       statusDiv.style.color = "#ef4444";
       return;
     }
 
-    statusDiv.innerText = "Modifying code layout...";
-    statusDiv.style.color = "#f59e0b";
-    
-    const codeUrl = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_FILE_PATH}`;
-    
+    const extraImagesArray = extraImagesRaw ? extraImagesRaw.split(',') : [];
+    const newId = Math.floor(Date.now() / 1000);
+
     try {
-      const res = await fetch(codeUrl, {
-        headers: { "Authorization": `token ${token}` }
-      });
-      
-      if (!res.ok) throw new Error("Could not fetch index.html. Check details.");
-      
-      const fileData = await res.json();
-      const oldContent = decodeURIComponent(escape(atob(fileData.sha ? fileData.content : "")));
+      statusDiv.innerText = "⏳ Step 1: Writing code to index.html storefront...";
+      statusDiv.style.color = "#f59e0b";
+      await updateGitHubFile(token, "index.html", name, category, brand, price, priceVal, desc, image, extraImagesArray, emoji, newId);
 
-      const arrayStartMarker = "const products = [";
-      const insertIndex = oldContent.indexOf(arrayStartMarker) + arrayStartMarker.length;
+      statusDiv.innerText = "⏳ Step 2: Syncing updates to products.html profile...";
+      await updateGitHubFile(token, "products.html", name, category, brand, price, priceVal, desc, image, extraImagesArray, emoji, newId);
 
-      if (oldContent.indexOf(arrayStartMarker) === -1) {
-        throw new Error("Could not find data array template target inside index.html.");
-      }
+      statusDiv.innerText = "✅ Success! Both pages successfully updated. Wait 45 seconds for GitHub to build updates live.";
+      statusDiv.style.color = "#22c55e";
 
-      const newId = Math.floor(Date.now() / 1000);
-      const newProductObject = `\n\n      // ── PRODUCT ADDED VIA ADMIN PANEL ─────────────────────────────────\n      { id:${newId}, name:"${name}", category:"${category}", brand:"${brand}", price:"${price}", priceVal:${priceVal}, desc:"${desc}", image:"${image}", emoji:"${emoji}" },`;
-
-      const updatedContent = oldContent.slice(0, insertIndex) + newProductObject + oldContent.slice(insertIndex);
-
-      statusDiv.innerText = "Publishing new item directly to your live platform store...";
-
-      const updateRes = await fetch(codeUrl, {
-        method: "PUT",
-        headers: {
-          "Authorization": `token ${token}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          message: `Added product: ${name} via Admin Dashboard`,
-          content: btoa(unescape(encodeURIComponent(updatedContent))),
-          sha: fileData.sha
-        })
-      });
-
-      if (updateRes.ok) {
-        statusDiv.innerText = "✅ Success! Product data written. Wait about 30-60 seconds for GitHub to build, then refresh your site.";
-        statusDiv.style.color = "#22c55e";
-        
-        document.getElementById('p-name').value = "";
-        document.getElementById('p-brand').value = "";
-        document.getElementById('p-price').value = "";
-        document.getElementById('p-priceVal').value = "";
-        document.getElementById('p-desc').value = "";
-        document.getElementById('p-image').value = "";
-      } else {
-        throw new Error("GitHub rejected updating your index.html text.");
-      }
-
+      // Reset form fields
+      document.getElementById('p-name').value = "";
+      document.getElementById('p-brand').value = "";
+      document.getElementById('p-price').value = "";
+      document.getElementById('p-priceVal').value = "";
+      document.getElementById('p-desc').value = "";
+      document.getElementById('p-image').value = "";
+      document.getElementById('p-extra-images').value = "";
     } catch (err) {
       statusDiv.innerText = "❌ " + err.message;
       statusDiv.style.color = "#ef4444";
