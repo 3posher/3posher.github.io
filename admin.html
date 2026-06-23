@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3posher - Admin Panel</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet"/>
+  <style>
+    body { background: #0a0a0a; color: #fff; font-family: 'Inter', sans-serif; padding: 2rem; margin: 0; }
+    .admin-box { max-width: 500px; margin: 2rem auto; background: #111; padding: 2rem; border-radius: 12px; border: 1px solid #222; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+    h2 { margin-top: 0; margin-bottom: 1.5rem; text-align: center; font-weight: 600; letter-spacing: -0.02em; }
+    label { display: block; margin: 0.8rem 0 0.2rem; font-size: 0.85rem; color: #777; font-weight: 500; }
+    input, textarea, select { width: 100%; padding: 0.65rem; background: #1a1a1a; border: 1px solid #333; border-radius: 6px; color: #fff; box-sizing: border-box; font-family: inherit; font-size: 0.9rem; }
+    input:focus, textarea:focus, select:focus { border-color: #444; outline: none; }
+    button { width: 100%; padding: 0.8rem; background: #22c55e; border: none; border-radius: 6px; color: #fff; font-weight: 600; margin-top: 1.5rem; cursor: pointer; font-size: 0.9rem; transition: background 0.2s; }
+    button:hover { background: #16a34a; }
+    #status { margin-top: 1.2rem; text-align: center; font-size: 0.9rem; font-weight: 500; line-height: 1.4; }
+  </style>
+</head>
+<body>
+
+<div class="admin-box">
+  <h2>3posher Admin Panel</h2>
+  
+  <label>GitHub Personal Access Token</label>
+  <input type="password" id="gh-token" placeholder="Paste your ghp_ token here">
+
+  <hr style="border: none; border-top: 1px solid #222; margin: 1.5rem 0;">
+
+  <label>Product Name</label>
+  <input type="text" id="p-name" placeholder="e.g. New Balance x Kith">
+
+  <label>Brand</label>
+  <input type="text" id="p-brand" placeholder="e.g. New Balance">
+
+  <label>Category</label>
+  <select id="p-category">
+    <option value="shoes">Shoes 👟</option>
+    <option value="clothes">Clothes 👕</option>
+  </select>
+
+  <label>Price Display (with symbol)</label>
+  <input type="text" id="p-price" placeholder="e.g. ₹2,699">
+
+  <label>Price Value (numbers only for filters)</label>
+  <input type="number" id="p-priceVal" placeholder="e.g. 2699">
+
+  <label>Description</label>
+  <textarea id="p-desc" rows="3" placeholder="Write your description here..."></textarea>
+
+  <label>Image Filename or URL (Leave empty if using emoji)</label>
+  <input type="text" id="p-image" placeholder="e.g. kith1.jpg">
+
+  <label>Fallback Emoji (Shows if no image name provided)</label>
+  <input type="text" id="p-emoji" value="👟">
+
+  <button onclick="addProduct()">Publish Product to Store</button>
+  <div id="status"></div>
+</div>
+
+<script>
+  // ── CONFIGURATION (Step 3 will handle this) ──
+  const GH_OWNER = "YOUR_GITHUB_USERNAME"; 
+  const GH_REPO = "YOUR_REPO_NAME";
+  const GH_FILE_PATH = "index.html"; 
+
+  async function addProduct() {
+    const token = document.getElementById('gh-token').value.trim();
+    const name = document.getElementById('p-name').value.trim();
+    const brand = document.getElementById('p-brand').value.trim();
+    const category = document.getElementById('p-category').value;
+    const price = document.getElementById('p-price').value.trim();
+    const priceVal = parseInt(document.getElementById('p-priceVal').value);
+    const desc = document.getElementById('p-desc').value.trim();
+    const image = document.getElementById('p-image').value.trim();
+    const emoji = document.getElementById('p-emoji').value.trim();
+    const statusDiv = document.getElementById('status');
+
+    if (!token || !name || !price || isNaN(priceVal)) {
+      statusDiv.innerText = "❌ Error: Please fill out Token, Name, Price, and Price Value.";
+      statusDiv.style.color = "#ef4444";
+      return;
+    }
+
+    statusDiv.innerText = "Connecting to GitHub server...";
+    statusDiv.style.color = "#f59e0b";
+
+    const url = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_FILE_PATH}`;
+
+    try {
+      // 1. Get current index.html code from GitHub
+      const res = await fetch(url, {
+        headers: { "Authorization": `token ${token}` }
+      });
+      
+      if (!res.ok) throw new Error("Could not connect to GitHub. Double-check your Username, Repo name, or Token.");
+      
+      const fileData = await res.json();
+      const oldContent = decodeURIComponent(escape(atob(fileData.sha ? fileData.content : "")));
+
+      // 2. Locate the array inside your index.html string
+      const arrayStartMarker = "const products = [";
+      const insertIndex = oldContent.indexOf(arrayStartMarker) + arrayStartMarker.length;
+
+      if (oldContent.indexOf(arrayStartMarker) === -1) {
+        throw new Error("Could not target the product list array format in index.html.");
+      }
+
+      // 3. Make a unique ID based on timestamp
+      const newId = Math.floor(Date.now() / 1000);
+      
+      // 4. Create the product block matching your clean design
+      const newProductObject = `\n\n      // ── PRODUCT ADDED VIA ADMIN PANEL ─────────────────────────────────\n      { id:${newId}, name:"${name}", category:"${category}", brand:"${brand}", price:"${price}", priceVal:${priceVal}, desc:"${desc}", image:"${image}", emoji:"${emoji}" },`;
+
+      // 5. Splice it into the file text
+      const updatedContent = oldContent.slice(0, insertIndex) + newProductObject + oldContent.slice(insertIndex);
+
+      statusDiv.innerText = "Uploading changes directly to your repository...";
+
+      // 6. Push the modified code back to GitHub
+      const updateRes = await fetch(url, {
+        method: "PUT",
+        headers: {
+          "Authorization": `token ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          message: `Added product: ${name} via Admin Dashboard`,
+          content: btoa(unescape(encodeURIComponent(updatedContent))),
+          sha: fileData.sha
+        })
+      });
+
+      if (updateRes.ok) {
+        statusDiv.innerText = "✅ Success! Product written to code. Give GitHub around 30-60 seconds to build, then refresh your website to see it.";
+        statusDiv.style.color = "#22c55e";
+        
+        // Clear layout inputs for next add
+        document.getElementById('p-name').value = "";
+        document.getElementById('p-brand').value = "";
+        document.getElementById('p-price').value = "";
+        document.getElementById('p-priceVal').value = "";
+        document.getElementById('p-desc').value = "";
+        document.getElementById('p-image').value = "";
+      } else {
+        throw new Error("GitHub rejected the file write update.");
+      }
+
+    } catch (err) {
+      statusDiv.innerText = "❌ " + err.message;
+      statusDiv.style.color = "#ef4444";
+    }
+  }
+</script>
+</body>
+</html>
