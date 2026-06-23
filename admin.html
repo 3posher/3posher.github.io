@@ -58,7 +58,10 @@
 
   <label>Fallback Emoji</label>
   <input type="text" id="p-emoji" value="👕">
-
+  
+  <label for="productSizes">Product Sizes (comma-separated, leave empty for 'One Size')</label>
+  <input type="text" id="productSizes" placeholder="e.g. S, M, L, XL or UK 7, UK 8">
+  
   <button onclick="publishProduct()">Publish to Both Pages</button>
   <div id="status"></div>
 </div>
@@ -67,7 +70,7 @@
   const GH_OWNER = "3posher"; 
   const GH_REPO = "3posher.github.io";
 
-  async function updateGitHubFile(token, fileName, name, category, brand, price, priceVal, desc, image, extraImages, emoji, newId) {
+  async function updateGitHubFile(token, fileName, name, category, brand, price, priceVal, desc, image, extraImages, emoji, sizes, newId) {
     const url = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${fileName}`;
     
     const res = await fetch(url, {
@@ -86,6 +89,7 @@
       throw new Error(`Could not find the products array marker inside ${fileName}.`);
     }
 
+    // Build standard image collection string
     let imagesCodeString = `["${image}"`;
     if(extraImages.length > 0) {
         extraImages.forEach(img => {
@@ -94,7 +98,10 @@
     }
     imagesCodeString += `]`;
 
-    const newProductObject = `\n\n      // ── ADDED VIA ADMIN PANEL ─────────────────────────────────\n      { id:${newId}, name:"${name}", category:"${category}", brand:"${brand}", price:"${price}", priceVal:${priceVal}, desc:"${desc}", image:"${image}", images: ${imagesCodeString}, emoji:"${emoji}" },`;
+    // Format sizes array safely into JavaScript code notation string
+    const sizesCodeString = sizes.length > 0 ? `[${sizes.map(s => `"${s}"`).join(", ")}]` : `[]`;
+
+    const newProductObject = `\n\n      // ── ADDED VIA ADMIN PANEL ─────────────────────────────────\n      { id:${newId}, name:"${name}", category:"${category}", brand:"${brand}", price:"${price}", priceVal:${priceVal}, desc:"${desc}", image:"${image}", images: ${imagesCodeString}, emoji:"${emoji}", sizes: ${sizesCodeString} },`;
 
     const updatedContent = oldContent.slice(0, insertIndex) + newProductObject + oldContent.slice(insertIndex);
 
@@ -125,6 +132,7 @@
     const image = document.getElementById('p-image').value.trim();
     const extraImagesRaw = document.getElementById('p-extra-images').value.trim();
     const emoji = document.getElementById('p-emoji').value.trim();
+    const sizesRaw = document.getElementById('productSizes').value.trim();
     const statusDiv = document.getElementById('status');
 
     if (!token || !name || !price || isNaN(priceVal)) {
@@ -134,15 +142,19 @@
     }
 
     const extraImagesArray = extraImagesRaw ? extraImagesRaw.split(',') : [];
+    
+    // Parse the sizes entry cleanly into an array of strings
+    const sizesArray = sizesRaw ? sizesRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+    
     const newId = Math.floor(Date.now() / 1000);
 
     try {
       statusDiv.innerText = "⏳ Step 1: Writing code to index.html storefront...";
       statusDiv.style.color = "#f59e0b";
-      await updateGitHubFile(token, "index.html", name, category, brand, price, priceVal, desc, image, extraImagesArray, emoji, newId);
+      await updateGitHubFile(token, "index.html", name, category, brand, price, priceVal, desc, image, extraImagesArray, emoji, sizesArray, newId);
 
       statusDiv.innerText = "⏳ Step 2: Syncing updates to products.html profile...";
-      await updateGitHubFile(token, "products.html", name, category, brand, price, priceVal, desc, image, extraImagesArray, emoji, newId);
+      await updateGitHubFile(token, "products.html", name, category, brand, price, priceVal, desc, image, extraImagesArray, emoji, sizesArray, newId);
 
       statusDiv.innerText = "✅ Success! Both pages successfully updated. Wait 45 seconds for GitHub to build updates live.";
       statusDiv.style.color = "#22c55e";
@@ -155,6 +167,7 @@
       document.getElementById('p-desc').value = "";
       document.getElementById('p-image').value = "";
       document.getElementById('p-extra-images').value = "";
+      document.getElementById('productSizes').value = "";
     } catch (err) {
       statusDiv.innerText = "❌ " + err.message;
       statusDiv.style.color = "#ef4444";
