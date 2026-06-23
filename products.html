@@ -581,21 +581,28 @@
     function fillPage() {
       document.title = `${product.name} — 3posher`;
 
-      // Size grid
-      const sizeGrid = document.getElementById('size-grid');
-      if (product.sizes && product.sizes.length) {
-        sizeGrid.innerHTML = product.sizes.map(s =>
-          `<button class="size-btn" onclick="selectSize(this)">${s}</button>`
-        ).join('');
-      } else {
-        sizeGrid.innerHTML = '<p style="color:#555;font-size:0.8rem">One size</p>';
-      }
-      document.getElementById("product-brand").textContent = product.brand.toUpperCase();
-      document.getElementById("product-name").textContent  = product.name;
-      document.getElementById("product-price").textContent = product.price;
-      document.getElementById("product-avail").textContent = product.avail;
-      document.getElementById("product-desc").textContent  = product.desc;
+   // Size grid
+  const sizeGrid = document.getElementById('size-grid');
+  if (product.sizes && product.sizes.length > 0) {
+    sizeGrid.innerHTML = product.sizes.map(s =>
+      `<button class="size-btn" onclick="selectSize(this)">${s}</button>`
+    ).join('');
+  } else {
+    sizeGrid.innerHTML = `<span style="color: #888; font-size: 0.85rem;">Standard Size (One Size)</span>`;
+  }
 
+  // Keep these lines exactly as they are below the size grid:
+  document.getElementById("product-brand").textContent = product.brand.toUpperCase();
+  document.getElementById("product-name").textContent = product.name;
+  document.getElementById("product-price").textContent = product.price;
+  document.getElementById("product-avail").textContent = product.avail;
+  document.getElementById("product-desc").textContent = product.desc;
+
+      // Simple click helper function for selection highlighting
+function selectSize(button) {
+    document.querySelectorAll('.size-btn').forEach(btn => btn.classList.remove('active'));
+    button.classList.add('active');
+}
       // Build details table
       const table = document.getElementById("details-table");
       table.innerHTML = product.details.map(row =>
