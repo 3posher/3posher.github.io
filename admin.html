@@ -42,10 +42,10 @@
   </select>
 
   <label>Price Display (with symbol)</label>
-  <input type="text" id="p-price" value="₹">
+  <input type="text" id="p-price" placeholder="e.g. 1,899" onblur="if(this.value && !this.value.startsWith('₹')) this.value = '₹' + this.value;">
 
   <label>Price Value (numbers only)</label>
-  <input type="text" id="p-price" placeholder="e.g. 1,899">
+  <input type="text" id="p-priceVal" placeholder="e.g. 1899">
 
   <label>Description</label>
   <textarea id="p-desc" rows="3" placeholder="Write product description..."></textarea>
@@ -86,7 +86,6 @@
       throw new Error(`Could not find the products array marker inside ${fileName}.`);
     }
 
-    // Dynamic clean formatting for code string generation
     let imagesCodeString = `["${image}"`;
     if(extraImages.length > 0) {
         extraImages.forEach(img => {
